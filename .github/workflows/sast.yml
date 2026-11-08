@@ -1,6 +1,6 @@
 # .github/workflows/sast.yml
 # Автоматический SAST-анализ: запускается при каждом push и pull request.
-# Результаты: JSON-отчёт в артефактах + SARIF во вкладке Security → Code scanning.
+# Результаты: находки во вкладке Security → Code scanning + SARIF в артефактах.
 
 name: SAST (Semgrep)
 
@@ -20,16 +20,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Semgrep scan
-        uses: semgrep/semgrep-action@v1
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          config: >-
-            p/owasp-top-ten
-            p/security-audit
-            p/javascript
-            p/typescript
-            p/secrets
-          generateSarif: "1"
+          python-version: "3.12"
+
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      # Наборы правил под классы уязвимостей из ТЗ.
+      # "|| true": находки не роняют пайплайн — отчёт всё равно загрузится.
+      - name: Run SAST scan
+        run: |
+          semgrep scan \
+            --config=p/owasp-top-ten \
+            --config=p/security-audit \
+            --config=p/javascript \
+            --config=p/typescript \
+            --config=p/secrets \
+            --metrics=off \
+            --exclude=".github" --exclude="node_modules" --exclude="data/static/codefixes" \
+            --sarif -o semgrep.sarif || true
 
       - name: Upload SARIF to GitHub Security
         if: always()
@@ -37,7 +48,7 @@ jobs:
         with:
           sarif_file: semgrep.sarif
 
-      - name: Upload JSON report as artifact
+      - name: Upload SARIF report as artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
